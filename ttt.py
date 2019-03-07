@@ -2,7 +2,10 @@
 
 import copy
 import random
+import sys
 from typing import List, Optional
+
+PLAYERS = ["X", "O"]  # maximizer == "X"
 
 class Board:
     """simple tic-tac-toe board"""
@@ -23,6 +26,11 @@ class Board:
     def __str__(self):
         separator = "\n---+---+---\n"
         return separator.join([" " + " | ".join(row) for row in self.board])
+    def __repr__(self):
+        return str(self)
+    def spaces(self):
+        """tell how many empty spots on the board"""
+        return sum(1 for i in range(3) for j in range(3) if self[i][j] == ' ')
     def won(self) -> Optional[str]:
         """check winner. Return the winner's symbol or None"""
         # check rows
@@ -39,50 +47,49 @@ class Board:
         if self.board[0][2] != ' ' and all(self.board[n][2-n] == self.board[0][2] for n in range(3)):
             return self.board[0][2]
 
-def evaluate(board) -> float:
-    """simple evaluator: +10, -10 for someone won, 0 for all other cases"""
+def evaluate(board) -> Optional[float]:
+    """simple evaluator: +10, -10 for someone won, 0 for tie"""
     winner = board.won()
-    if not winner:
-        return 0
-    elif winner == "X":
+    if winner == "X":
         return 10
-    else:
+    elif winner == "O":
         return -10
+    if not board.spaces():
+        return 0
 
 def minimax(board, who) -> float:
-    """player `who` move any one step on the board, find the minimax score"""
-    assert who in ["X", "O"]
-    opponent = ["O", "X"][who == "X"]
+    """player `who` moved one step on the board, find the minimax score"""
+    assert who in PLAYERS
+    opponent = PLAYERS[who == "X"]
     value = evaluate(board)
-    if value:
-        return value
+    if value is not None:
+        return value  # exact score of the board
     # possible opponent moves
-    candidates = [b for b in [board.place(r, c, opponent) for r in range(3) for c in range(3)] if b]
-    if not candidates:
-        return 0
-    # evaluate my minimax score
-    elif who == "X":
-        return max(minimax(b, who) for b in candidates)
+    candscores = [minimax(b, opponent) for b in [board.place(r, c, opponent) for r in range(3) for c in range(3)] if b]
+    if not candscores:
+        return 0 # should caught by above
+    # evaluate the worse case score
+    if who == "X":
+        return min(candscores)
     else:
-        return min(minimax(b, who) for b in candidates)
+        return max(candscores)
 
 def play():
     "auto play tic-tac-toe"
-    players = ["X", "O"]
     minimizer = True
     game = Board()
     # loop until the game is done
     while not game.won():
-        player = players[minimizer]
-        candidates = [b for b in [game.place(r, c, player) for r in range(3) for c in range(3)] if b]
+        player = PLAYERS[minimizer]
+        candidates = [(b, minimax(b, player)) for b in [game.place(r, c, player) for r in range(3) for c in range(3)] if b]
         if not candidates:
             break
         random.shuffle(candidates)
         # find best move
-        if player == "O":
-            game = min(candidates, key=lambda b: minimax(b, players[not minimizer]))
+        if player == "X":
+            game = max(candidates, key=lambda pair: pair[1])[0]
         else:
-            game = max(candidates, key=lambda b: minimax(b, players[not minimizer]))
+            game = min(candidates, key=lambda pair: pair[1])[0]
         # print board and switch
         minimizer = not minimizer
         print()
@@ -96,5 +103,5 @@ def play():
         print("%s has won" % winner)
 
 if __name__ == "__main__":
-    random.seed(3)
+    random.seed(int(sys.argv[1]))
     play()
