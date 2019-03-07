@@ -47,7 +47,7 @@ class Board:
         if self.board[0][2] != ' ' and all(self.board[n][2-n] == self.board[0][2] for n in range(3)):
             return self.board[0][2]
 
-def evaluate(board) -> Optional[float]:
+def simple_evaluate(board) -> Optional[float]:
     """simple evaluator: +10, -10 for someone won, 0 for tie"""
     winner = board.won()
     if winner == "X":
@@ -56,6 +56,33 @@ def evaluate(board) -> Optional[float]:
         return -10
     if not board.spaces():
         return 0
+
+def heuristic_evaluate(board) -> float:
+    """heuristic evaluation <http://www.ntu.edu.sg/home/ehchua/programming/java/javagame_tictactoe_ai.html>"""
+    score = 0
+    rows = [# two diagonals
+        [board.board[i][i] for i in range(3)],
+        [board.board[i][2-i] for i in range(3)]
+    ] + [   # horizontals
+        [board.board[n][i] for i in range(3)] for n in range(3)
+    ] + [   # verticals
+        [board.board[i][n] for i in range(3)] for n in range(3)
+    ]
+    for row in rows:
+        # 3-in-a-row == score 100
+        # 2-in-a-row == score 10
+        # 1-in-a-row == score 1
+        # 0-in-a-row, or mixed entries == score 0 (no chase for either to win)
+        # X == positive, O == negative
+        countx = sum(1 for c in row if c == 'X')
+        counto = sum(1 for c in row if c == 'O')
+        if countx == 0:
+            score -= int(10**(counto-1))
+        elif counto == 0:
+            score += int(10**(countx-1))
+    return score
+
+evaluate = heuristic_evaluate
 
 def minimax(board, who) -> float:
     """player `who` moved one step on the board, find the minimax score"""
