@@ -6,6 +6,7 @@ import sys
 from typing import List, Optional
 
 PLAYERS = ["X", "O"]  # maximizer == "X"
+COUNT = 0
 
 class Board:
     """simple tic-tac-toe board"""
@@ -23,11 +24,9 @@ class Board:
             return newboard
     def __getitem__(self, key):
         return self.board[key]
-    def __str__(self):
-        separator = "\n---+---+---\n"
-        return separator.join([" " + " | ".join(row) for row in self.board])
     def __repr__(self):
-        return str(self)
+        separator = "\n---+---+---\n "
+        return " " + separator.join([" | ".join(row) for row in self.board])
     def spaces(self):
         """tell how many empty spots on the board"""
         return sum(1 for i in range(3) for j in range(3) if self[i][j] == ' ')
@@ -82,37 +81,40 @@ def heuristic_evaluate(board) -> float:
             score += int(10**(countx-1))
     return score
 
-evaluate = heuristic_evaluate
+evaluate = simple_evaluate
 
-def minimax(board, who) -> float:
-    """player `who` moved one step on the board, find the minimax score"""
-    assert who in PLAYERS
-    opponent = PLAYERS[who == "X"]
+def minimax(board, player) -> float:
+    """player to move one step on the board, find the minimax (best of the worse case) score"""
+    global COUNT
+    COUNT += 1
+    assert player in PLAYERS
+    opponent = "O" if player == "X" else "X"
     value = evaluate(board)
     if value is not None:
         return value  # exact score of the board
-    # possible opponent moves
-    candscores = [minimax(b, opponent) for b in [board.place(r, c, opponent) for r in range(3) for c in range(3)] if b]
-    if not candscores:
-        return 0 # should caught by above
-    # evaluate the worse case score
-    if who == "X":
-        return min(candscores)
-    else:
+    # possible opponent moves: The worse case scores in different options
+    candscores = [minimax(b, opponent) for b in [board.place(r, c, player) for r in range(3) for c in range(3)] if b]
+    # evaluate the best of worse case scores
+    if player == "X":
         return max(candscores)
+    else:
+        return min(candscores)
 
 def play():
     "auto play tic-tac-toe"
+    global COUNT
     minimizer = True
     game = Board()
     # loop until the game is done
     while not game.won():
         player = PLAYERS[minimizer]
-        candidates = [(b, minimax(b, player)) for b in [game.place(r, c, player) for r in range(3) for c in range(3)] if b]
+        opponent = PLAYERS[not minimizer]
+        COUNT = 0
+        candidates = [(b, minimax(b, opponent)) for b in [game.place(r, c, player) for r in range(3) for c in range(3)] if b]
         if not candidates:
             break
         random.shuffle(candidates)
-        # find best move
+        # find best move: optimizing the worse case score
         if player == "X":
             game = max(candidates, key=lambda pair: pair[1])[0]
         else:
@@ -120,7 +122,7 @@ def play():
         # print board and switch
         minimizer = not minimizer
         print()
-        print("%s move:" % player)
+        print("%s move after %d search steps:" % (player, COUNT))
         print(game)
     winner = game.won()
     print()
