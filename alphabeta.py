@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Tic-tac-toe using simple minimax algorithm (optionally with heuristic
-evaluation function)
+"""Tic-tac-toe using minimax algorithm with alpha-beta pruning
 """
 
 import copy
@@ -88,7 +87,7 @@ def heuristic_evaluate(board) -> float:
 
 evaluate = simple_evaluate
 
-def minimax(board, player) -> float:
+def simple_minimax(board, player) -> float:
     """player to move one step on the board, find the minimax (best of the worse case) score"""
     global COUNT
     COUNT += 1
@@ -98,12 +97,50 @@ def minimax(board, player) -> float:
     if value is not None:
         return value  # exact score of the board
     # possible opponent moves: The worse case scores in different options
-    candscores = [minimax(b, opponent) for b in [board.place(r, c, player) for r in range(3) for c in range(3)] if b]
+    candscores = [simple_minimax(b, opponent) for b in [board.place(r, c, player) for r in range(3) for c in range(3)] if b]
     # evaluate the best of worse case scores
     if player == "X":
         return max(candscores)
     else:
         return min(candscores)
+
+def alphabeta(board, player, alpha=-float("inf"), beta=float("inf")) -> float:
+    """minimax with alpha-beta pruning. It implies that we expect the score
+    should between lowerbound alpha and upperbound beta to be useful
+    """
+    global COUNT
+    COUNT += 1
+    assert player in PLAYERS
+    opponent = "O" if player == "X" else "X"
+    value = evaluate(board)
+    if value is not None:
+        return value  # exact score of the board (terminal nodes)
+    # minimax search with alpha-beta pruning
+    children = filter(None, [board.place(r, c, player) for r in range(3) for c in range(3)])
+    if "Heuristic improvement" == False:
+        # sort by a heuristic function to hint for earlier cut-off
+        children = sorted(children, key=heuristic_evaluate, reverse=True)
+    if "Killer heuristic" == False:
+        # remember the move that caused the last (last 2) beta cut-off and check that first
+        # <https://en.wikipedia.org/wiki/Killer_heuristic>
+        pass
+    if player == "X":   # player is maximizer
+        value = -float("inf")
+        for child in children:
+            value = max(value, alphabeta(child, opponent, alpha, beta))
+            alpha = max(alpha, value)
+            if alpha >= beta:
+                break   # beta cut-off
+    else:               # player is minimizer
+        value = float("inf")
+        for child in children:
+            value = min(value, alphabeta(child, opponent, alpha, beta))
+            beta = min(beta, value)
+            if alpha >= beta:
+                break   # alpha cut-off
+    return value
+
+minimax = alphabeta
 
 def play():
     "auto play tic-tac-toe"
