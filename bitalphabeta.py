@@ -113,8 +113,13 @@ def heuristic_evaluate(board) -> float:
 
 evaluate = simple_evaluate
 
+CACHE = {}
+
 def simple_minimax(board, player) -> float:
     """player to move one step on the board, find the minimax (best of the worse case) score"""
+    # check cache for quick return
+    if (board.board, player) in CACHE:
+        return CACHE[(board.board, player)]
     global COUNT
     COUNT += 1
     assert player in PLAYERS
@@ -126,9 +131,13 @@ def simple_minimax(board, player) -> float:
     candscores = [simple_minimax(b, opponent) for b in [board.place(r, c, player) for r in range(3) for c in range(3)] if b]
     # evaluate the best of worse case scores
     if player == 1:
-        return max(candscores)
+        value = max(candscores)
     else:
-        return min(candscores)
+        value = min(candscores)
+    # save into cache
+    CACHE[(board.board, player)] = value
+    return value
+    
 
 def alphabeta(board, player, alpha=-float("inf"), beta=float("inf")) -> float:
     """minimax with alpha-beta pruning. It implies that we expect the score
