@@ -5,34 +5,32 @@
 heuristics
 """
 
-import copy
 import random
 import sys
-from collections import deque
-from itertools import zip_longest
-from typing import List, Optional
+import itertools
+import collections
 
-from gmpy import popcount
+import gmpy
 
 PLAYERS = [1, -1]  # maximizer == 1
-POSITIONS = [(r,c) for r in range(3) for c in range(3)]
+COORDS = [(r, c) for r in range(3) for c in range(3)]
 COUNT = 0
 
-def symbol(code) -> str:
+def symbol(code):
     """Return the symbol of player"""
     assert code in PLAYERS
     return "X" if code == 1 else "O"
 
 def grouper(iterable, n, fillvalue=None):
-    # https://stackoverflow.com/questions/434287/what-is-the-most-pythonic-way-to-iterate-over-a-list-in-chunks
+    # function copied from Python doc, itertools module
     args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
+    return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 class Board:
     """bit-vector based tic-tac-toe board"""
     def __init__(self, board=0):
         self.board = board
-    def mask(self, row, col, who) -> int:
+    def mask(self, row, col, player):
         """Produce the bitmask for row and col
         The 18-bit vector is row-major, with matrix cell (0,0) the MSB. And the
         higher 9-bit is for 1 (X) and lower 9-bit is for -1 (O)
@@ -41,7 +39,7 @@ class Board:
             row, col: integers from 0 to 2 inclusive
         """
         offset = 3*(2-row) + (2-col)
-        if who == 1:
+        if player == 1:
             offset += 9
         return 1 << offset
     def check(self, row, col, player):
@@ -84,14 +82,14 @@ class Board:
     def spaces(self):
         """tell how many empty spots on the board"""
         # alternative if no gmpy: bit(self.board).count("1")
-        return 9 - popcount(self.board)
+        return 9 - gmpy.popcount(self.board)
 
     masks = (0b000000111, 0b000111000, 0b111000000, # rows
              0b001001001, 0b010010010, 0b100100100, # cols
              0b100010001, 0b001010100               # diags
             )
-    def won(self) -> Optional[int]:
-        """check winner. Return the winner's symbol or None"""
+    def won(self):
+        """check winner. Return the winner (+1 or -1) or None"""
         shifted = self.board >> 9
         for mask in self.masks:
             if self.board & mask == mask:
@@ -99,8 +97,8 @@ class Board:
             if shifted & mask == mask:
                 return 1
 
-def simple_evaluate(board) -> Optional[float]:
-    """simple evaluator: +10, -10 for someone won, 0 for tie"""
+def simple_evaluate(board):
+    """simple evaluator: +10, -10 for someone won, 0 for tie. None otherwise"""
     winner = board.won()
     if winner == 1:
         return 10
@@ -109,7 +107,7 @@ def simple_evaluate(board) -> Optional[float]:
     if not board.spaces():
         return 0
 
-def heuristic_evaluate(board) -> float:
+def heuristic_evaluate(board):
     """heuristic evaluation <http://www.ntu.edu.sg/home/ehchua/programming/java/javagame_tictactoe_ai.html>"""
     score = 0
     for mask in Board.masks:
@@ -120,8 +118,8 @@ def heuristic_evaluate(board) -> float:
         # X == positive, O == negative
         oboard = board.board
         xboard = oboard >> 9
-        countx = popcount(xboard & mask)
-        counto = popcount(oboard & mask)
+        countx = gmpy.popcount(xboard & mask)
+        counto = gmpy.popcount(oboard & mask)
         if countx == 0:
             score -= int(10**(counto-1))
         elif counto == 0:
@@ -132,7 +130,7 @@ evaluate = simple_evaluate
 
 CACHE = {}
 
-def simple_minimax(board, player) -> float:
+def simple_minimax(board, player):
     """player to move one step on the board, find the minimax (best of the worse case) score"""
     # check cache for quick return
     if (board.board, player) in CACHE:
@@ -145,7 +143,7 @@ def simple_minimax(board, player) -> float:
     if value is not None:
         return value  # exact score of the board
     # possible opponent moves: The worse case scores in different options
-    candscores = [simple_minimax(b, opponent) for b in [board.place(r, c, player) for r, c in POSITIONS] if b]
+    candscores = [simple_minimax(b, opponent) for b in [board.place(r, c, player) for r, c in COORDS] if b]
     # evaluate the best of worse case scores
     if player == 1:
         value = max(candscores)
@@ -155,9 +153,9 @@ def simple_minimax(board, player) -> float:
     CACHE[(board.board, player)] = value
     return value
 
-KILLERS = deque()
+KILLERS = collections.deque()
 
-def alphabeta(board, player, alpha=-float("inf"), beta=float("inf")) -> float:
+def alphabeta(board, player, alpha=-float("inf"), beta=float("inf")):
     """minimax with alpha-beta pruning. It implies that we expect the score
     should between lowerbound alpha and upperbound beta to be useful
     """
@@ -173,7 +171,7 @@ def alphabeta(board, player, alpha=-float("inf"), beta=float("inf")) -> float:
     if value is not None:
         return value  # exact score of the board (terminal nodes)
     # minimax search with alpha-beta pruning
-    masks = filter(None, [board.check(r, c, player) for r,c in POSITIONS])
+    masks = filter(None, [board.check(r, c, player) for r, c in COORDS])
     children = [(mask, board.place(mask)) for mask in masks]
     if "Heuristic improvement" == False:
         # sort by a heuristic function to hint for earlier cut-off
@@ -216,7 +214,7 @@ def play():
         player = PLAYERS[minimizer]
         opponent = PLAYERS[not minimizer]
         COUNT = 0
-        candidates = [(b, minimax(b, opponent)) for b in [game.place(r, c, player) for r, c in POSITIONS] if b]
+        candidates = [(b, minimax(b, opponent)) for b in [game.place(r, c, player) for r, c in COORDS] if b]
         if not candidates:
             break
         random.shuffle(candidates)
@@ -227,15 +225,14 @@ def play():
             game = min(candidates, key=lambda pair: pair[1])[0]
         # print board and switch
         minimizer = not minimizer
-        print()
-        print("%s move after %d search steps:" % (symbol(player), COUNT))
+        print("\n%s move after %d search steps:" % (symbol(player), COUNT))
         print(game)
+    # show result
     winner = game.won()
-    print()
     if not winner:
-        print("Tied")
+        print("\nTied")
     else:
-        print("%s has won" % symbol(winner))
+        print("\n%s has won" % symbol(winner))
 
 if __name__ == "__main__":
     random.seed(int(sys.argv[1]))

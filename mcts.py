@@ -4,42 +4,30 @@
 """Tic-tac-toe using monte carlo tree search
 """
 
-import copy
 import random
 import sys
-from itertools import zip_longest
-from typing import List, Optional
+import itertools
 
-from gmpy import popcount
-
-import pdb
-import traceback
-def debughook(etype, value, tb):
-    traceback.print_exception(etype, value, tb)
-    print()
-    pdb.pm()
-sys.excepthook = debughook
-breakpoint = pdb.set_trace
+import gmpy
 
 PLAYERS = [1, -1]  # maximizer == 1
-POSITIONS = [(r,c) for r in range(3) for c in range(3)]
-COUNT = 0
+COORDS = [(r, c) for r in range(3) for c in range(3)]
 
-def symbol(code) -> str:
+def symbol(code):
     """Return the symbol of player"""
     assert code in PLAYERS
     return "X" if code == 1 else "O"
 
 def grouper(iterable, n, fillvalue=None):
-    # https://stackoverflow.com/questions/434287/what-is-the-most-pythonic-way-to-iterate-over-a-list-in-chunks
+    # function copied from Python doc, itertools module
     args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
+    return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 class Board:
     """bit-vector based tic-tac-toe board"""
     def __init__(self, board=0):
         self.board = board
-    def mask(self, row, col, who) -> int:
+    def mask(self, row, col, player):
         """Produce the bitmask for row and col
         The 18-bit vector is row-major, with matrix cell (0,0) the MSB. And the
         higher 9-bit is for 1 (X) and lower 9-bit is for -1 (O)
@@ -48,20 +36,20 @@ class Board:
             row, col: integers from 0 to 2 inclusive
         """
         offset = 3*(2-row) + (2-col)
-        if who == 1:
+        if player == 1:
             offset += 9
         return 1 << offset
-    def place(self, row, col, what: int):
+    def place(self, row, col, player):
         """produce a new board with row and col set to a symbol. Return None if
         some symbol already set.
 
         Args:
             what: either +1 or -1
         """
-        assert what in PLAYERS
-        mask = self.mask(row, col, what)
-        checkmask = self.mask(row, col, -what)
-        if (mask | checkmask) & self.board:
+        assert player in PLAYERS
+        mask = self.mask(row, col, player)
+        othermask = self.mask(row, col, -player)
+        if (mask | othermask) & self.board:
             return None  # something already on this position
         return Board(self.board | mask)
     def __repr__(self):
@@ -77,14 +65,14 @@ class Board:
     def spaces(self):
         """tell how many empty spots on the board"""
         # alternative if no gmpy: bit(self.board).count("1")
-        return 9 - popcount(self.board)
+        return 9 - gmpy.popcount(self.board)
 
     masks = (0b000000111, 0b000111000, 0b111000000, # rows
              0b001001001, 0b010010010, 0b100100100, # cols
              0b100010001, 0b001010100               # diags
             )
-    def won(self) -> Optional[int]:
-        """check winner. Return the winner's symbol or None"""
+    def won(self):
+        """check winner. Return the winner (+1 or -1) or None"""
         shifted = self.board >> 9
         for mask in self.masks:
             if self.board & mask == mask:
@@ -92,8 +80,8 @@ class Board:
             if shifted & mask == mask:
                 return 1
 
-def simple_evaluate(board) -> Optional[float]:
-    """simple evaluator: +10, -10 for someone won, 0 for tie"""
+def simple_evaluate(board):
+    """simple evaluator: +10, -10 for someone won, 0 for tie. None otherwise"""
     winner = board.won()
     if winner == 1:
         return 10
@@ -104,7 +92,7 @@ def simple_evaluate(board) -> Optional[float]:
 
 evaluate = simple_evaluate
 
-def mcts(board, player) -> float:
+def mcts(board, player):
     """monte carlo tree serach
 
     Returns:
@@ -117,7 +105,7 @@ def mcts(board, player) -> float:
         step = Board(board.board)
         who = player
         while step.spaces():
-            r, c = random.choice(POSITIONS)
+            r, c = random.choice(COORDS)
             nextstep = step.place(r, c, who)
             if nextstep is not None:
                 who = -who  # next player's turn
@@ -136,8 +124,7 @@ def play():
     while not game.won():
         player = PLAYERS[minimizer]
         opponent = PLAYERS[not minimizer]
-        COUNT = 0
-        candidates = [(b, mcts(b, opponent)) for b in [game.place(r, c, player) for r, c in POSITIONS] if b]
+        candidates = [(b, mcts(b, opponent)) for b in [game.place(r, c, player) for r, c in COORDS] if b]
         if not candidates:
             break
         random.shuffle(candidates)
@@ -145,15 +132,13 @@ def play():
         game, score = min(candidates, key=lambda pair: pair[1])
         # print board and switch
         minimizer = not minimizer
-        print()
-        print("%s move on score %f:" % (symbol(player), score))
+        print("\n%s move on score %f:" % (symbol(player), score))
         print(game)
     winner = game.won()
-    print()
     if not winner:
-        print("Tied")
+        print("\nTied")
     else:
-        print("%s has won" % symbol(winner))
+        print("\n%s has won" % symbol(winner))
 
 if __name__ == "__main__":
     random.seed(int(sys.argv[1]))
